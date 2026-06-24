@@ -171,6 +171,21 @@
       assert('deserialize prunes grid refs to missing players', pruned.grid[1]['P'] === null);
     })();
 
+    // --- share link encode/decode round-trip ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Renée');          // unicode name
+      L.addPlayer(s, 'Bob');
+      L.assignToCell(s, 1, 'P', s.players[0].id);
+      L.assignToCell(s, 3, 'LCF', s.players[1].id);
+      const restored = L.decodeState(L.encodeState(s));
+      assert('encode/decode round-trips players (incl. unicode)', eq(restored.players, s.players));
+      assert('encode/decode round-trips grid', eq(restored.grid, s.grid));
+
+      const junk = L.decodeState('!!!not-base64!!!');
+      assert('decodeState of garbage returns valid empty state', junk.players.length === 0 && !!junk.grid[1]);
+    })();
+
     document.getElementById('summary').textContent =
       `${passed} passed, ${failed} failed`;
     document.getElementById('summary').style.color = failed ? '#a11' : '#15611a';

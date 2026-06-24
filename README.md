@@ -29,6 +29,13 @@ To host it, drop the three files on any static host:
 - **Innings played** — each batting-order row shows `N / 5 inn`, the number of
   innings that player is fielding.
 - **Per-inning fill** — each inning header shows `n/10` fielders assigned.
+- **Share link** — encodes the whole game (batting order + every position) into a
+  link. "Share link" copies it (or opens the share sheet on mobile) and updates the
+  address bar so you can bookmark it. Opening that link on any device rebuilds the
+  exact lineup — a self-contained snapshot, no account or server needed.
+- **Mobile friendly** — panels stack, controls are touch-sized, drag works by
+  press-and-hold (so normal scrolling still works), and the grid scrolls sideways
+  with the position labels pinned.
 - **Print / Save as PDF** — the toolbar button opens the browser print dialog;
   choose "Save as PDF". The batting order prints on its own page and the field
   grid on the next; controls and the per-player innings count are hidden, and

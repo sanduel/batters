@@ -124,6 +124,29 @@
     return state;
   }
 
+  // Unicode-safe base64 (handles accented names). Standard MDN approach.
+  function b64encodeUtf8(s) {
+    return btoa(encodeURIComponent(s).replace(/%([0-9A-F]{2})/g, function (_, h) {
+      return String.fromCharCode(parseInt(h, 16));
+    }));
+  }
+  function b64decodeUtf8(s) {
+    return decodeURIComponent(Array.prototype.map.call(atob(s), function (c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+  }
+
+  // Compact, URL-shareable encoding of a whole game. encodeState -> string you
+  // drop in a link; decodeState parses it back (tolerant: returns an empty,
+  // valid state on any garbage).
+  function encodeState(state) {
+    return b64encodeUtf8(serialize(state));
+  }
+  function decodeState(str) {
+    try { return deserialize(b64decodeUtf8(str)); }
+    catch (e) { return newState(); }
+  }
+
   var Lineup = {
     POSITIONS: POSITIONS,
     INNINGS: INNINGS,
@@ -136,7 +159,9 @@
     removePlayer: removePlayer,
     filledCount: filledCount,
     serialize: serialize,
-    deserialize: deserialize
+    deserialize: deserialize,
+    encodeState: encodeState,
+    decodeState: decodeState
   };
 
   root.Lineup = Lineup;

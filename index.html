@@ -105,8 +105,40 @@
     .cell-chip .cn { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cell-clear { color: var(--muted); border: none; background: none; padding: 0 .15rem; font-size: .95rem; line-height: 1; }
 
-    .toolbar { margin-top: 1rem; display: flex; gap: .5rem; }
+    .toolbar { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; }
     .hint { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
+
+    /* toast */
+    #toast {
+      position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%) translateY(2rem);
+      background: var(--ink); color: #fff; padding: .6rem 1rem; border-radius: 8px;
+      font-size: .9rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* always let the grid scroll sideways rather than crush its columns */
+    #field-grid { min-width: 540px; }
+
+    /* ---- mobile ---- */
+    @media (max-width: 760px) {
+      body { padding: .75rem; }
+      h1 { font-size: 1.15rem; }
+      .layout { gap: .9rem; }
+      .order-panel, .grid-panel { flex: 1 1 100%; }
+      /* keep the position labels visible while scrolling innings */
+      th.pos-head, td.pos-label {
+        position: sticky; left: 0; z-index: 2;
+        box-shadow: 1px 0 0 var(--line);
+      }
+      /* bigger touch targets */
+      button { padding: .6rem .9rem; }
+      .add-form input { padding: .6rem; font-size: 1rem; }
+      .player-row { padding: .65rem .6rem; }
+      .row-del { font-size: 1.4rem; padding: 0 .4rem; }
+      .cell { min-height: 2.8rem; }
+      .cell-clear { font-size: 1.2rem; padding: 0 .3rem; }
+      .toolbar button { flex: 1 1 auto; }
+    }
 
     @media print {
       @page { size: letter landscape; margin: 0.4in; }
@@ -151,12 +183,14 @@
       <h2>Field Positions</h2>
       <table id="field-grid"></table>
       <div class="toolbar">
-        <button id="print-btn" class="primary">Print / Save as PDF</button>
+        <button id="share-btn" class="primary">Share link</button>
+        <button id="print-btn">Print / Save as PDF</button>
         <button id="reset-btn" class="danger">Reset game</button>
       </div>
       <p class="hint">A player fields one position per inning. Dropping them into a new spot moves them there.</p>
     </section>
   </div>
+  <div id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"
           integrity="sha512-csIng5zcB+XpulRUa+ev1zKo7zRNGpEaVfNB9On1no9KYTEY/rLGAEEpvgdw6nim1WdTuihZY1eqZ31K7/fZjw=="
@@ -168,7 +202,23 @@
       var L = window.Lineup;
       var STORAGE_KEY = 'softball-lineup-v1';
 
+      // A shared link carries the whole game in the URL hash (#g=...).
+      function loadFromHash() {
+        var m = (location.hash || '').match(/[#&]g=([^&]+)/);
+        if (!m) return null;
+        try {
+          var st = L.decodeState(decodeURIComponent(m[1]));
+          return st.players.length || hasAnyAssignment(st) ? st : null;
+        } catch (e) { return null; }
+      }
+      function hasAnyAssignment(st) {
+        return L.INNINGS.some(function (inn) {
+          return L.POSITIONS.some(function (pos) { return st.grid[inn][pos]; });
+        });
+      }
       function load() {
+        var shared = loadFromHash();
+        if (shared) return shared;
         try {
           var raw = localStorage.getItem(STORAGE_KEY);
           if (raw) return L.deserialize(raw);
@@ -344,6 +394,9 @@
           sort: false,
           filter: '.cell-clear',
           forceFallback: true,
+          delay: 120,
+          delayOnTouchOnly: true,
+          touchStartThreshold: 6,
           animation: 120,
           ghostClass: 'sortable-ghost',
           onAdd: function (evt) {
@@ -369,6 +422,9 @@
         sort: true,
         filter: '.row-del, .empty-hint, .name-edit',
         forceFallback: true,
+        delay: 120,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 6,
         animation: 120,
         ghostClass: 'sortable-ghost',
         onUpdate: function () {
@@ -405,6 +461,33 @@
         }
         nameInput.focus();
       });
+
+      var toastEl = document.getElementById('toast');
+      var toastTimer;
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+      }
+
+      function shareLink() {
+        var url = location.origin + location.pathname + '#g=' + encodeURIComponent(L.encodeState(state));
+        // reflect it in the address bar so it's bookmarkable, without adding history
+        try { history.replaceState(null, '', url); } catch (e) { /* ignore */ }
+        if (navigator.share) {
+          navigator.share({ title: 'Softball Lineup', url: url }).catch(function () {});
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url)
+            .then(function () { toast('Link copied — paste it to share this lineup'); })
+            .catch(function () { toast('Copy this link from the address bar'); });
+        } else {
+          toast('Copy this link from the address bar');
+        }
+      }
+      document.getElementById('share-btn').addEventListener('click', shareLink);
 
       document.getElementById('print-btn').addEventListener('click', function () {
         window.print();
