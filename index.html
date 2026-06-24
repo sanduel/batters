@@ -69,6 +69,13 @@
     .row-del { color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 0 .2rem; border: none; background: none; }
     .empty-hint { color: var(--muted); font-size: .85rem; font-style: italic; }
     .sortable-ghost { opacity: .4; }
+    /* press-and-hold to drag on touch shouldn't select text or pop the iOS
+       callout menu over a player's name/chip */
+    .player-row, .cell, .cell-chip {
+      -webkit-user-select: none; -moz-user-select: none; user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .name-edit { -webkit-user-select: text; user-select: text; }
     .name-edit {
       flex: 1; font: inherit; font-weight: 600;
       padding: .1rem .3rem; border: 1px solid var(--accent); border-radius: 4px; min-width: 0;
@@ -203,7 +210,7 @@
   <h1>⚾ Inglorious Batters</h1>
   <div class="layout">
     <section class="panel order-panel">
-      <h2>Batting Order</h2>
+      <h2>Team</h2>
       <div class="sort-toggle" id="sort-toggle">
         <button type="button" data-mode="manual" class="active">Batting order</button>
         <button type="button" data-mode="az">A–Z</button>
