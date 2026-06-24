@@ -256,9 +256,11 @@
       var L = window.Lineup;
       var STORAGE_KEY = 'softball-lineup-v1';
 
-      // A shared link carries the whole game in the URL hash (#g=...).
-      function loadFromHash() {
-        var m = (location.hash || '').match(/[#&]g=([^&]+)/);
+      // A shared link carries the whole game in the URL query (?g=...). We use
+      // the query string, not the #fragment: iOS share/Mail/Messages strip the
+      // fragment. Still read a legacy #g= link as a fallback.
+      function loadFromUrl() {
+        var m = (location.search + location.hash).match(/[?#&]g=([^&]+)/);
         if (!m) return null;
         try {
           var st = L.decodeState(decodeURIComponent(m[1]));
@@ -271,7 +273,7 @@
         });
       }
       function load() {
-        var shared = loadFromHash();
+        var shared = loadFromUrl();
         if (shared) return shared;
         try {
           var raw = localStorage.getItem(STORAGE_KEY);
@@ -632,9 +634,9 @@
       }
 
       function shareLink() {
-        // base64url payload is already URL-safe; no encodeURIComponent needed
-        // (and avoids %-sequences that link detectors mangle).
-        var url = location.origin + location.pathname + '#g=' + L.encodeState(state);
+        // Put the game in the query string (?g=), NOT the #fragment — iOS strips
+        // fragments when sharing. base64url is already URL-safe (no encoding needed).
+        var url = location.origin + location.pathname + '?g=' + L.encodeState(state);
         // reflect it in the address bar so it's bookmarkable, without adding history
         try { history.replaceState(null, '', url); } catch (e) { /* ignore */ }
         if (navigator.share) {
