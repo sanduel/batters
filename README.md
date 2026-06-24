@@ -1,4 +1,4 @@
-# Softball Lineup & Field Positions
+# Inglorious Batters
 
 A single-page tool to build a batting order and assign field positions per inning
 for slow-pitch softball (10 fielders: 4 outfielders).

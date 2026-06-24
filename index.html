@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Softball Lineup</title>
+  <title>Inglorious Batters</title>
   <style>
     :root {
       --bg: #f4f6f8;
@@ -76,10 +76,15 @@
 
     /* sort toggle */
     .sort-toggle { display: flex; margin-bottom: .7rem; }
-    .sort-toggle button { flex: 1; font-size: .8rem; padding: .35rem .4rem; border-radius: 0; }
+    .sort-toggle button { flex: 1; font-size: .78rem; padding: .35rem .3rem; border-radius: 0; }
+    .sort-toggle button + button { border-left: none; }
     .sort-toggle button:first-child { border-radius: 6px 0 0 6px; }
-    .sort-toggle button:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+    .sort-toggle button:last-child { border-radius: 0 6px 6px 0; }
     .sort-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .group-head {
+      list-style: none; font-size: .72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .03em; margin: .55rem 0 .25rem; padding-left: .2rem;
+    }
 
     /* Grid */
     table { border-collapse: collapse; width: 100%; table-layout: fixed; }
@@ -116,8 +121,39 @@
     }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* tap-to-assign picker */
+    .picker-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem;
+    }
+    .picker-overlay[hidden] { display: none; }
+    .picker-sheet {
+      background: #fff; width: 100%; max-width: 460px; max-height: 82vh; overflow-y: auto;
+      border-radius: 14px; padding: 1rem 1.1rem; box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    }
+    .picker-title { font-weight: 700; font-size: 1rem; margin-bottom: .75rem; }
+    .picker-list { display: flex; flex-direction: column; gap: .4rem; }
+    .pick-player {
+      display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
+      padding: .7rem .8rem; font-size: 1rem; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    }
+    .pick-player.active { border-color: var(--accent); background: var(--accent-soft); }
+    .pick-player .sw { width: 1rem; height: 1rem; border-radius: 50%; flex: 0 0 auto; }
+    .pick-player .pn { flex: 1; font-weight: 600; }
+    .pick-player .pi { font-size: .8rem; color: var(--muted); }
+    .picker-empty { color: var(--muted); padding: .5rem 0; }
+    .picker-actions { display: flex; gap: .5rem; margin-top: .9rem; }
+    .picker-actions button { flex: 1; padding: .7rem; }
+
     /* always let the grid scroll sideways rather than crush its columns */
     #field-grid { min-width: 540px; }
+
+    /* one-inning-at-a-time nav (mobile only) */
+    #inning-nav { display: none; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
+    #inning-nav button { padding: .45rem 1rem; font-size: 1.2rem; line-height: 1; }
+    #inning-nav button:disabled { opacity: .35; }
+    #inning-nav .inn-label { font-weight: 700; font-size: 1rem; }
+    .inn-hidden { display: none !important; }
 
     /* ---- mobile ---- */
     @media (max-width: 760px) {
@@ -125,11 +161,10 @@
       h1 { font-size: 1.15rem; }
       .layout { gap: .9rem; }
       .order-panel, .grid-panel { flex: 1 1 100%; }
-      /* keep the position labels visible while scrolling innings */
-      th.pos-head, td.pos-label {
-        position: sticky; left: 0; z-index: 2;
-        box-shadow: 1px 0 0 var(--line);
-      }
+      /* one inning at a time — no sideways scroll needed */
+      #inning-nav { display: flex; }
+      #field-grid { min-width: 0; }
+      th.pos-head, td.pos-label { position: sticky; left: 0; z-index: 2; }
       /* bigger touch targets */
       button { padding: .6rem .9rem; }
       .add-form input { padding: .6rem; font-size: 1rem; }
@@ -146,7 +181,9 @@
         padding: 0; background: #fff;
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
       }
-      .add-form, .row-del, .cell-clear, .toolbar, .hint, .sort-toggle, .innings { display: none !important; }
+      .add-form, .row-del, .cell-clear, .toolbar, .hint, .sort-toggle, .innings, #inning-nav { display: none !important; }
+      /* always print every inning, even if the phone view was showing just one */
+      .inn-hidden { display: table-cell !important; }
       /* batting order on its own page, field grid on the next */
       .layout { display: block; }
       .panel { border: none; box-shadow: none; padding: 0; }
@@ -163,13 +200,14 @@
   </style>
 </head>
 <body>
-  <h1>⚾ Softball Lineup &amp; Field Positions</h1>
+  <h1>⚾ Inglorious Batters</h1>
   <div class="layout">
     <section class="panel order-panel">
       <h2>Batting Order</h2>
       <div class="sort-toggle" id="sort-toggle">
         <button type="button" data-mode="manual" class="active">Batting order</button>
         <button type="button" data-mode="az">A–Z</button>
+        <button type="button" data-mode="innings">By inning</button>
       </div>
       <ul id="batting-list"></ul>
       <form class="add-form" id="add-form">
@@ -181,6 +219,11 @@
 
     <section class="panel grid-panel">
       <h2>Field Positions</h2>
+      <div id="inning-nav">
+        <button type="button" id="inn-prev" aria-label="Previous inning">‹</button>
+        <span class="inn-label" id="inn-label">Inning 1</span>
+        <button type="button" id="inn-next" aria-label="Next inning">›</button>
+      </div>
       <table id="field-grid"></table>
       <div class="toolbar">
         <button id="share-btn" class="primary">Share link</button>
@@ -191,6 +234,17 @@
     </section>
   </div>
   <div id="toast"></div>
+
+  <div id="picker" class="picker-overlay" hidden>
+    <div class="picker-sheet" role="dialog" aria-modal="true">
+      <div class="picker-title" id="picker-title"></div>
+      <div class="picker-list" id="picker-list"></div>
+      <div class="picker-actions">
+        <button id="picker-clear" class="danger">Empty this slot</button>
+        <button id="picker-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"
           integrity="sha512-csIng5zcB+XpulRUa+ev1zKo7zRNGpEaVfNB9On1no9KYTEY/rLGAEEpvgdw6nim1WdTuihZY1eqZ31K7/fZjw=="
@@ -231,6 +285,9 @@
 
       var state = load();
       var sortMode = 'manual';   // 'manual' (batting order) | 'az'
+      var lastDragEnd = 0;       // guards tap-to-pick against firing after a drag
+      var currentInning = 1;     // which inning is shown in the mobile one-at-a-time view
+      var mobileMQ = window.matchMedia('(max-width: 760px)');
 
       var listEl = document.getElementById('batting-list');
       var tableEl = document.getElementById('field-grid');
@@ -264,15 +321,30 @@
           listEl.appendChild(li);
           return;
         }
-        // Each row keeps its batting-order number even when shown A–Z.
-        var entries = state.players.map(function (p, i) { return { p: p, pos: i + 1 }; });
+        // Each row keeps its batting-order number even when re-sorted.
+        var entries = state.players.map(function (p, i) {
+          return { p: p, pos: i + 1, innings: L.countInnings(state, p.id) };
+        });
         if (sortMode === 'az') {
           entries = entries.slice().sort(function (a, b) {
             return a.p.name.localeCompare(b.p.name, undefined, { sensitivity: 'base' });
           });
+        } else if (sortMode === 'innings') {
+          // most innings first; tie-break alphabetically
+          entries = entries.slice().sort(function (a, b) {
+            return b.innings - a.innings || a.p.name.localeCompare(b.p.name, undefined, { sensitivity: 'base' });
+          });
         }
+        var lastGroup = null;
         entries.forEach(function (entry) {
           var p = entry.p;
+          if (sortMode === 'innings' && entry.innings !== lastGroup) {
+            lastGroup = entry.innings;
+            var gh = document.createElement('li');
+            gh.className = 'group-head';
+            gh.textContent = entry.innings + (entry.innings === 1 ? ' inning' : ' innings');
+            listEl.appendChild(gh);
+          }
           var li = document.createElement('li');
           li.className = 'player-row';
           li.dataset.playerId = p.id;
@@ -328,6 +400,7 @@
         hr.appendChild(el('th', 'pos-head', 'Pos'));
         L.INNINGS.forEach(function (inn) {
           var th = document.createElement('th');
+          th.dataset.inning = inn;
           var filled = L.filledCount(state, inn);
           th.innerHTML = 'Inning ' + inn +
             '<span class="inn-fill' + (filled === L.POSITIONS.length ? ' full' : '') + '">' +
@@ -343,6 +416,7 @@
           tr.appendChild(el('td', 'pos-label', pos));
           L.INNINGS.forEach(function (inn) {
             var td = document.createElement('td');
+            td.dataset.inning = inn;
             var cell = document.createElement('div');
             cell.className = 'cell';
             cell.dataset.inning = inn;
@@ -357,7 +431,8 @@
               var cc = colorFor(pid);
               chip.style.borderLeft = '5px solid ' + cc;
               chip.style.background = cc + '22';
-              chip.querySelector('.cell-clear').addEventListener('click', function () {
+              chip.querySelector('.cell-clear').addEventListener('click', function (e) {
+                e.stopPropagation();
                 L.clearCell(state, inn, pos);
                 refresh();
               });
@@ -365,6 +440,12 @@
             } else {
               cell.classList.add('empty');
             }
+            // Tap/click the slot to pick a player (mobile-friendly alternative
+            // to dragging). Ignored right after a drag so a drop doesn't reopen it.
+            cell.addEventListener('click', function () {
+              if (Date.now() - lastDragEnd < 250) return;
+              openPicker(inn, pos);
+            });
             makeCellSortable(cell);
             td.appendChild(cell);
             tr.appendChild(td);
@@ -372,6 +453,23 @@
           tbody.appendChild(tr);
         });
         tableEl.appendChild(tbody);
+        applyInningView();
+      }
+
+      // On mobile, show one inning column at a time (driven by the ‹ › nav).
+      // Hidden columns get .inn-hidden, which print CSS overrides so a phone
+      // can still print the full grid.
+      function applyInningView() {
+        var mobile = mobileMQ.matches;
+        if (currentInning < 1) currentInning = 1;
+        if (currentInning > L.INNINGS.length) currentInning = L.INNINGS.length;
+        var nodes = tableEl.querySelectorAll('[data-inning]');
+        Array.prototype.forEach.call(nodes, function (el) {
+          el.classList.toggle('inn-hidden', mobile && (parseInt(el.dataset.inning, 10) !== currentInning));
+        });
+        document.getElementById('inn-label').textContent = 'Inning ' + currentInning;
+        document.getElementById('inn-prev').disabled = currentInning <= 1;
+        document.getElementById('inn-next').disabled = currentInning >= L.INNINGS.length;
       }
 
       function el(tag, cls, text) {
@@ -399,6 +497,7 @@
           touchStartThreshold: 6,
           animation: 120,
           ghostClass: 'sortable-ghost',
+          onEnd: function () { lastDragEnd = Date.now(); },
           onAdd: function (evt) {
             var pid = evt.item.dataset.playerId;
             var to = evt.to;
@@ -420,13 +519,14 @@
       var listSortable = Sortable.create(listEl, {
         group: { name: 'shared', pull: 'clone', put: false },
         sort: true,
-        filter: '.row-del, .empty-hint, .name-edit',
+        filter: '.row-del, .empty-hint, .name-edit, .group-head',
         forceFallback: true,
         delay: 120,
         delayOnTouchOnly: true,
         touchStartThreshold: 6,
         animation: 120,
         ghostClass: 'sortable-ghost',
+        onEnd: function () { lastDragEnd = Date.now(); },
         onUpdate: function () {
           var ids = Array.prototype.map.call(listEl.children, function (li) {
             return li.dataset.playerId;
@@ -437,6 +537,15 @@
           refresh();
         }
       });
+
+      // ---- inning nav (mobile one-at-a-time) ----
+      document.getElementById('inn-prev').addEventListener('click', function () {
+        currentInning -= 1; applyInningView();
+      });
+      document.getElementById('inn-next').addEventListener('click', function () {
+        currentInning += 1; applyInningView();
+      });
+      mobileMQ.addEventListener('change', applyInningView);
 
       // ---- sort toggle ----
       // In A–Z mode the list is displayed alphabetically and manual reordering
@@ -462,6 +571,57 @@
         nameInput.focus();
       });
 
+      // ---- tap-to-assign picker ----
+      var pickerEl = document.getElementById('picker');
+      var pickerList = document.getElementById('picker-list');
+      var pickerTitle = document.getElementById('picker-title');
+      var pickerClear = document.getElementById('picker-clear');
+      var pickerCtx = null;
+
+      function openPicker(inning, pos) {
+        pickerCtx = { inning: inning, pos: pos };
+        pickerTitle.textContent = 'Inning ' + inning + ' · ' + pos;
+        pickerList.innerHTML = '';
+        if (!state.players.length) {
+          var em = document.createElement('div');
+          em.className = 'picker-empty';
+          em.textContent = 'Add players to the batting order first.';
+          pickerList.appendChild(em);
+        } else {
+          var current = state.grid[inning][pos];
+          state.players.forEach(function (p) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'pick-player' + (p.id === current ? ' active' : '');
+            b.innerHTML = '<span class="sw"></span><span class="pn"></span>' +
+              '<span class="pi">' + L.countInnings(state, p.id) + '/' + L.INNINGS.length + ' inn</span>';
+            b.querySelector('.sw').style.background = colorFor(p.id);
+            b.querySelector('.pn').textContent = p.name;
+            b.addEventListener('click', function () {
+              L.assignToCell(state, inning, pos, p.id);
+              closePicker();
+              refresh();
+            });
+            pickerList.appendChild(b);
+          });
+        }
+        pickerClear.style.display = state.grid[inning][pos] ? '' : 'none';
+        pickerEl.hidden = false;
+      }
+      function closePicker() { pickerEl.hidden = true; pickerCtx = null; }
+
+      pickerClear.addEventListener('click', function () {
+        if (!pickerCtx) return;
+        L.clearCell(state, pickerCtx.inning, pickerCtx.pos);
+        closePicker();
+        refresh();
+      });
+      document.getElementById('picker-cancel').addEventListener('click', closePicker);
+      pickerEl.addEventListener('click', function (e) { if (e.target === pickerEl) closePicker(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !pickerEl.hidden) closePicker();
+      });
+
       var toastEl = document.getElementById('toast');
       var toastTimer;
       function toast(msg) {
@@ -472,11 +632,15 @@
       }
 
       function shareLink() {
-        var url = location.origin + location.pathname + '#g=' + encodeURIComponent(L.encodeState(state));
+        // base64url payload is already URL-safe; no encodeURIComponent needed
+        // (and avoids %-sequences that link detectors mangle).
+        var url = location.origin + location.pathname + '#g=' + L.encodeState(state);
         // reflect it in the address bar so it's bookmarkable, without adding history
         try { history.replaceState(null, '', url); } catch (e) { /* ignore */ }
         if (navigator.share) {
-          navigator.share({ title: 'Softball Lineup', url: url }).catch(function () {});
+          // share only the URL — a title/text gets appended as extra text by
+          // some apps, which is the "bare url then a wall of text" problem.
+          navigator.share({ url: url }).catch(function () {});
           return;
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {

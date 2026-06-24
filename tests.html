@@ -178,9 +178,23 @@
       L.addPlayer(s, 'Bob');
       L.assignToCell(s, 1, 'P', s.players[0].id);
       L.assignToCell(s, 3, 'LCF', s.players[1].id);
-      const restored = L.decodeState(L.encodeState(s));
+      const enc = L.encodeState(s);
+      const restored = L.decodeState(enc);
       assert('encode/decode round-trips players (incl. unicode)', eq(restored.players, s.players));
       assert('encode/decode round-trips grid', eq(restored.grid, s.grid));
+      assert('encoded payload is URL-safe (no + / =)', !/[+/=]/.test(enc));
+      // tolerant of legacy serialized-object links too (backward compatible)
+      const legacy = btoa(unescape(encodeURIComponent(L.serialize(s))));
+      assert('decodeState still reads legacy object links',
+        eq(L.decodeState(legacy).players.map(p => p.name), s.players.map(p => p.name)));
+
+      // compact form must be much smaller than the legacy form for a full roster
+      const big = L.newState();
+      for (let i = 0; i < 12; i++) L.addPlayer(big, 'Player ' + (i + 1));
+      L.INNINGS.forEach((inn, k) => L.POSITIONS.forEach((pos, j) =>
+        L.assignToCell(big, inn, pos, big.players[(j + k) % big.players.length].id)));
+      assert('compact share link is <40% of the legacy size',
+        L.encodeState(big).length < btoa(unescape(encodeURIComponent(L.serialize(big)))).length * 0.4);
 
       const junk = L.decodeState('!!!not-base64!!!');
       assert('decodeState of garbage returns valid empty state', junk.players.length === 0 && !!junk.grid[1]);

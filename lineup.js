@@ -136,15 +136,56 @@
     }).join(''));
   }
 
-  // Compact, URL-shareable encoding of a whole game. encodeState -> string you
-  // drop in a link; decodeState parses it back (tolerant: returns an empty,
-  // valid state on any garbage).
-  function encodeState(state) {
-    return b64encodeUtf8(serialize(state));
+  function toUrlSafe(b64) { return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function fromUrlSafe(s) {
+    var b64 = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    return b64;
   }
+
+  // Compact, URL-shareable encoding of a whole game, kept as small as possible
+  // so the link isn't a wall of text. We store just the player names and, per
+  // inning, the filled "positionIndex:playerIndex" slots — no ids, no repeated
+  // position keys. URL-safe base64 with no "=" padding (plain base64's +, /, and
+  // trailing = get mangled/truncated by link detectors, notably Apple's).
+  function encodeState(state) {
+    var idIndex = {};
+    state.players.forEach(function (p, i) { idIndex[p.id] = i; });
+    var names = state.players.map(function (p) { return p.name; });
+    var grid = INNINGS.map(function (inn) {
+      var parts = [];
+      POSITIONS.forEach(function (pos, pi) {
+        var id = state.grid[inn][pos];
+        if (id != null && idIndex[id] != null) parts.push(pi + ':' + idIndex[id]);
+      });
+      return parts.join(',');
+    });
+    return toUrlSafe(b64encodeUtf8(JSON.stringify([names, grid])));
+  }
+
+  // Tolerant: accepts the compact array form OR the legacy serialized-object
+  // form, url-safe or standard base64, and returns an empty valid state on junk.
   function decodeState(str) {
-    try { return deserialize(b64decodeUtf8(str)); }
-    catch (e) { return newState(); }
+    try {
+      var json = b64decodeUtf8(fromUrlSafe(str));
+      var data = JSON.parse(json);
+      if (data && !Array.isArray(data)) return deserialize(json); // legacy object
+      var names = data[0] || [];
+      var grid = data[1] || [];
+      var state = newState();
+      names.forEach(function (n) { addPlayer(state, n); }); // ids become p1..pN
+      grid.forEach(function (spec, gi) {
+        var inn = INNINGS[gi];
+        if (inn == null || !spec) return;
+        spec.split(',').forEach(function (pair) {
+          var kv = pair.split(':');
+          var pos = POSITIONS[parseInt(kv[0], 10)];
+          var pl = state.players[parseInt(kv[1], 10)];
+          if (pos && pl) state.grid[inn][pos] = pl.id;
+        });
+      });
+      return state;
+    } catch (e) { return newState(); }
   }
 
   var Lineup = {
