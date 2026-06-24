@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Softball Lineup</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #fff;
+      --ink: #1f2933;
+      --muted: #7b8794;
+      --line: #d9e0e6;
+      --accent: #2f6f3e;
+      --accent-soft: #e3f0e6;
+      --chip: #eef3f7;
+      --warn: #c0392b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 1.5rem;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--ink);
+    }
+    h1 { margin: 0 0 1rem; font-size: 1.4rem; }
+    h2 { margin: 0 0 .75rem; font-size: 1.05rem; }
+    .layout { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; padding: 1rem 1.1rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    .order-panel { flex: 0 0 320px; }
+    .grid-panel { flex: 1 1 560px; min-width: 0; overflow-x: auto; }
+
+    /* Add form */
+    .add-form { display: flex; gap: .5rem; margin-top: .9rem; }
+    .add-form input {
+      flex: 1; padding: .5rem .6rem; border: 1px solid var(--line);
+      border-radius: 6px; font-size: .95rem;
+    }
+    button {
+      font: inherit; cursor: pointer; border: 1px solid var(--line);
+      background: #fff; border-radius: 6px; padding: .5rem .8rem;
+    }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.danger { background: #fff; color: var(--warn); border-color: var(--warn); }
+    button.danger:hover { background: var(--warn); color: #fff; }
+
+    /* Batting order list */
+    ul#batting-list { list-style: none; margin: 0; padding: 0; }
+    .player-row {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .5rem .6rem; margin-bottom: .4rem;
+      background: var(--chip); border: 1px solid var(--line); border-radius: 8px;
+      cursor: grab;
+    }
+    .player-row .num {
+      width: 1.5rem; height: 1.5rem; flex: 0 0 auto;
+      display: grid; place-items: center;
+      background: var(--accent); color: #fff; border-radius: 50%;
+      font-size: .8rem; font-weight: 700;
+    }
+    .player-row .pname { flex: 1; font-weight: 600; }
+    .player-row .innings {
+      font-size: .75rem; color: var(--muted); white-space: nowrap;
+    }
+    .player-row .innings b { color: var(--accent); }
+    .row-del { color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 0 .2rem; border: none; background: none; }
+    .empty-hint { color: var(--muted); font-size: .85rem; font-style: italic; }
+    .sortable-ghost { opacity: .4; }
+    .name-edit {
+      flex: 1; font: inherit; font-weight: 600;
+      padding: .1rem .3rem; border: 1px solid var(--accent); border-radius: 4px; min-width: 0;
+    }
+
+    /* sort toggle */
+    .sort-toggle { display: flex; margin-bottom: .7rem; }
+    .sort-toggle button { flex: 1; font-size: .8rem; padding: .35rem .4rem; border-radius: 0; }
+    .sort-toggle button:first-child { border-radius: 6px 0 0 6px; }
+    .sort-toggle button:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+    .sort-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Grid */
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th, td { border: 1px solid var(--line); padding: 0; }
+    th { background: var(--accent-soft); font-size: .85rem; padding: .4rem .5rem; }
+    th.pos-head { text-align: right; width: 3.4rem; }
+    td.pos-label { background: var(--accent-soft); font-weight: 700; text-align: right; padding: .4rem .5rem; width: 3.4rem; font-size: .9rem; }
+    .inn-fill { display: block; font-size: .7rem; font-weight: 500; color: var(--muted); }
+    .inn-fill.full { color: var(--accent); }
+    .cell {
+      min-height: 2.4rem; min-width: 5.5rem; padding: .25rem;
+      display: flex; align-items: stretch;
+    }
+    .cell.empty::after {
+      content: ""; flex: 1; border: 1px dashed transparent; border-radius: 6px;
+    }
+    .cell.drop-hint { background: var(--accent-soft); }
+    .cell-chip {
+      flex: 1; display: flex; align-items: center; gap: .35rem;
+      background: var(--chip); border: 1px solid var(--line); border-radius: 6px;
+      padding: .3rem .4rem; cursor: grab; font-size: .85rem;
+    }
+    .cell-chip .cn { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cell-clear { color: var(--muted); border: none; background: none; padding: 0 .15rem; font-size: .95rem; line-height: 1; }
+
+    .toolbar { margin-top: 1rem; display: flex; gap: .5rem; }
+    .hint { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
+
+    @media print {
+      @page { size: letter landscape; margin: 0.4in; }
+      body {
+        padding: 0; background: #fff;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .add-form, .row-del, .cell-clear, .toolbar, .hint, .sort-toggle, .innings { display: none !important; }
+      /* batting order on its own page, field grid on the next */
+      .layout { display: block; }
+      .panel { border: none; box-shadow: none; padding: 0; }
+      .order-panel { width: 100%; max-width: 4.5in; break-after: page; page-break-after: always; }
+      .grid-panel { overflow: visible; }
+      h1 { font-size: 16pt; margin-bottom: .35rem; }
+      h2 { font-size: 11pt; }
+      .player-row { padding: .2rem .4rem; margin-bottom: .2rem; }
+      table { page-break-inside: avoid; }
+      th, td.pos-label, .num, .player-row, .cell-chip {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>⚾ Softball Lineup &amp; Field Positions</h1>
+  <div class="layout">
+    <section class="panel order-panel">
+      <h2>Batting Order</h2>
+      <div class="sort-toggle" id="sort-toggle">
+        <button type="button" data-mode="manual" class="active">Batting order</button>
+        <button type="button" data-mode="az">A–Z</button>
+      </div>
+      <ul id="batting-list"></ul>
+      <form class="add-form" id="add-form">
+        <input id="name-input" type="text" placeholder="Add a player…" autocomplete="off" />
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <p class="hint">Drag rows to reorder, drag a player into the grid to field them, double-click a name to edit it.</p>
+    </section>
+
+    <section class="panel grid-panel">
+      <h2>Field Positions</h2>
+      <table id="field-grid"></table>
+      <div class="toolbar">
+        <button id="print-btn" class="primary">Print / Save as PDF</button>
+        <button id="reset-btn" class="danger">Reset game</button>
+      </div>
+      <p class="hint">A player fields one position per inning. Dropping them into a new spot moves them there.</p>
+    </section>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"
+          integrity="sha512-csIng5zcB+XpulRUa+ev1zKo7zRNGpEaVfNB9On1no9KYTEY/rLGAEEpvgdw6nim1WdTuihZY1eqZ31K7/fZjw=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="lineup.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var L = window.Lineup;
+      var STORAGE_KEY = 'softball-lineup-v1';
+
+      function load() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) return L.deserialize(raw);
+        } catch (e) { /* ignore */ }
+        return L.newState();
+      }
+      function save() {
+        try { localStorage.setItem(STORAGE_KEY, L.serialize(state)); } catch (e) { /* ignore */ }
+      }
+
+      var state = load();
+      var sortMode = 'manual';   // 'manual' (batting order) | 'az'
+
+      var listEl = document.getElementById('batting-list');
+      var tableEl = document.getElementById('field-grid');
+      var nameInput = document.getElementById('name-input');
+
+      function nameOf(id) {
+        var p = state.players.find(function (x) { return x.id === id; });
+        return p ? p.name : '';
+      }
+
+      // A distinct, stable color per player (keyed off the id, so it survives
+      // reordering and deletion).
+      var PALETTE = [
+        '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#469990',
+        '#9a6324', '#800000', '#808000', '#000075', '#f032e6', '#2a9d8f',
+        '#e76f51', '#6a4c93', '#1d3557', '#d62828'
+      ];
+      function colorFor(id) {
+        var n = parseInt(String(id).replace(/^p/, ''), 10);
+        if (isNaN(n)) n = 1;
+        return PALETTE[((n - 1) % PALETTE.length + PALETTE.length) % PALETTE.length];
+      }
+
+      // ---- rendering ----
+      function renderOrder() {
+        listEl.innerHTML = '';
+        if (!state.players.length) {
+          var li = document.createElement('li');
+          li.className = 'empty-hint';
+          li.textContent = 'No players yet — add some above.';
+          listEl.appendChild(li);
+          return;
+        }
+        // Each row keeps its batting-order number even when shown A–Z.
+        var entries = state.players.map(function (p, i) { return { p: p, pos: i + 1 }; });
+        if (sortMode === 'az') {
+          entries = entries.slice().sort(function (a, b) {
+            return a.p.name.localeCompare(b.p.name, undefined, { sensitivity: 'base' });
+          });
+        }
+        entries.forEach(function (entry) {
+          var p = entry.p;
+          var li = document.createElement('li');
+          li.className = 'player-row';
+          li.dataset.playerId = p.id;
+          var innings = L.countInnings(state, p.id);
+          li.innerHTML =
+            '<span class="num">' + entry.pos + '</span>' +
+            '<span class="pname"></span>' +
+            '<span class="innings"><b>' + innings + '</b> / ' + L.INNINGS.length + ' inn</span>' +
+            '<button class="row-del" title="Remove player">&times;</button>';
+          var pnameEl = li.querySelector('.pname');
+          pnameEl.textContent = p.name;
+          pnameEl.title = 'Double-click to edit';
+          pnameEl.addEventListener('dblclick', function () { startEdit(li, pnameEl, p.id); });
+          var c = colorFor(p.id);
+          li.style.borderLeft = '5px solid ' + c;
+          li.style.background = c + '22';
+          li.querySelector('.num').style.background = c;
+          li.querySelector('.row-del').addEventListener('click', function () {
+            L.removePlayer(state, p.id);
+            refresh();
+          });
+          listEl.appendChild(li);
+        });
+      }
+
+      // Inline-edit a player's name: swap the label for an input.
+      function startEdit(li, pnameEl, id) {
+        var input = document.createElement('input');
+        input.className = 'name-edit';
+        input.value = nameOf(id);
+        pnameEl.replaceWith(input);
+        input.focus();
+        input.select();
+        var finished = false;
+        function commit() {
+          if (finished) return;
+          finished = true;
+          L.renamePlayer(state, id, input.value);
+          refresh();
+        }
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { finished = true; refresh(); }
+        });
+        input.addEventListener('blur', commit);
+      }
+
+      function renderGrid() {
+        tableEl.innerHTML = '';
+        // header
+        var thead = document.createElement('thead');
+        var hr = document.createElement('tr');
+        hr.appendChild(el('th', 'pos-head', 'Pos'));
+        L.INNINGS.forEach(function (inn) {
+          var th = document.createElement('th');
+          var filled = L.filledCount(state, inn);
+          th.innerHTML = 'Inning ' + inn +
+            '<span class="inn-fill' + (filled === L.POSITIONS.length ? ' full' : '') + '">' +
+            filled + '/' + L.POSITIONS.length + '</span>';
+          hr.appendChild(th);
+        });
+        thead.appendChild(hr);
+        tableEl.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        L.POSITIONS.forEach(function (pos) {
+          var tr = document.createElement('tr');
+          tr.appendChild(el('td', 'pos-label', pos));
+          L.INNINGS.forEach(function (inn) {
+            var td = document.createElement('td');
+            var cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.inning = inn;
+            cell.dataset.position = pos;
+            var pid = state.grid[inn][pos];
+            if (pid) {
+              var chip = document.createElement('div');
+              chip.className = 'cell-chip';
+              chip.dataset.playerId = pid;
+              chip.innerHTML = '<span class="cn"></span><button class="cell-clear" title="Remove from spot">&times;</button>';
+              chip.querySelector('.cn').textContent = nameOf(pid);
+              var cc = colorFor(pid);
+              chip.style.borderLeft = '5px solid ' + cc;
+              chip.style.background = cc + '22';
+              chip.querySelector('.cell-clear').addEventListener('click', function () {
+                L.clearCell(state, inn, pos);
+                refresh();
+              });
+              cell.appendChild(chip);
+            } else {
+              cell.classList.add('empty');
+            }
+            makeCellSortable(cell);
+            td.appendChild(cell);
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        tableEl.appendChild(tbody);
+      }
+
+      function el(tag, cls, text) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+      }
+
+      function refresh() {
+        renderOrder();
+        renderGrid();
+        save();
+      }
+
+      // ---- drag wiring ----
+      function makeCellSortable(cell) {
+        Sortable.create(cell, {
+          group: { name: 'shared', pull: true, put: true },
+          sort: false,
+          filter: '.cell-clear',
+          forceFallback: true,
+          animation: 120,
+          ghostClass: 'sortable-ghost',
+          onAdd: function (evt) {
+            var pid = evt.item.dataset.playerId;
+            var to = evt.to;
+            var inning = parseInt(to.dataset.inning, 10);
+            var pos = to.dataset.position;
+
+            if (evt.from !== listEl) {
+              // moved a chip from another cell — vacate its origin first
+              L.clearCell(state, parseInt(evt.from.dataset.inning, 10), evt.from.dataset.position);
+            }
+            // assignToCell moves the player out of any other slot they held
+            // this inning, so dropping into a new spot relocates them.
+            L.assignToCell(state, inning, pos, pid);
+            refresh();
+          }
+        });
+      }
+
+      var listSortable = Sortable.create(listEl, {
+        group: { name: 'shared', pull: 'clone', put: false },
+        sort: true,
+        filter: '.row-del, .empty-hint, .name-edit',
+        forceFallback: true,
+        animation: 120,
+        ghostClass: 'sortable-ghost',
+        onUpdate: function () {
+          var ids = Array.prototype.map.call(listEl.children, function (li) {
+            return li.dataset.playerId;
+          }).filter(Boolean);
+          state.players.sort(function (a, b) {
+            return ids.indexOf(a.id) - ids.indexOf(b.id);
+          });
+          refresh();
+        }
+      });
+
+      // ---- sort toggle ----
+      // In A–Z mode the list is displayed alphabetically and manual reordering
+      // is disabled (sort:false), but dragging players into the grid still works.
+      document.getElementById('sort-toggle').addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-mode]');
+        if (!btn) return;
+        sortMode = btn.dataset.mode;
+        Array.prototype.forEach.call(this.children, function (b) {
+          b.classList.toggle('active', b.dataset.mode === sortMode);
+        });
+        listSortable.option('sort', sortMode === 'manual');
+        refresh();
+      });
+
+      // ---- form & reset ----
+      document.getElementById('add-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (L.addPlayer(state, nameInput.value)) {
+          nameInput.value = '';
+          refresh();
+        }
+        nameInput.focus();
+      });
+
+      document.getElementById('print-btn').addEventListener('click', function () {
+        window.print();
+      });
+
+      document.getElementById('reset-btn').addEventListener('click', function () {
+        if (confirm('Reset the whole game? This clears the batting order and all positions.')) {
+          state = L.newState();
+          refresh();
+        }
+      });
+
+      refresh();
+    })();
+  </script>
+</body>
+</html>

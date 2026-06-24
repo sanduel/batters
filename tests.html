@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lineup logic tests</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    h1 { font-size: 1.2rem; }
+    .row { padding: .35rem .6rem; border-radius: 4px; margin: .2rem 0; font-family: ui-monospace, monospace; font-size: .85rem; }
+    .pass { background: #e6f7e6; color: #15611a; }
+    .fail { background: #fde8e8; color: #a11; font-weight: 600; }
+    #summary { font-weight: 700; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Lineup logic tests</h1>
+  <div id="summary"></div>
+  <div id="results"></div>
+
+  <script src="lineup.js"></script>
+  <script>
+    const results = document.getElementById('results');
+    let passed = 0, failed = 0;
+
+    function assert(name, cond) {
+      const div = document.createElement('div');
+      div.className = 'row ' + (cond ? 'pass' : 'fail');
+      div.textContent = (cond ? 'PASS  ' : 'FAIL  ') + name;
+      results.appendChild(div);
+      cond ? passed++ : failed++;
+    }
+    function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+    const L = window.Lineup;
+
+    // --- addPlayer ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, '  Alice  ');
+      assert('addPlayer trims whitespace', s.players.length === 1 && s.players[0].name === 'Alice');
+
+      const before = s.players.length;
+      L.addPlayer(s, '   ');
+      assert('addPlayer ignores blank/whitespace names', s.players.length === before);
+
+      L.addPlayer(s, 'Mike');
+      L.addPlayer(s, 'Mike');
+      const mikes = s.players.filter(p => p.name === 'Mike');
+      assert('addPlayer allows duplicate names', mikes.length === 2);
+      assert('duplicate names get distinct ids', mikes[0].id !== mikes[1].id);
+    })();
+
+    // --- countInnings ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Alice');
+      const id = s.players[0].id;
+      assert('countInnings is 0 when unassigned', L.countInnings(s, id) === 0);
+
+      L.assignToCell(s, 1, 'P', id);
+      L.assignToCell(s, 2, 'C', id);
+      assert('countInnings counts distinct innings played', L.countInnings(s, id) === 2);
+
+      // dropping into a new slot in the same inning MOVES the player; still 2 innings
+      L.assignToCell(s, 2, 'SS', id);
+      assert('moving within an inning keeps it one inning', L.countInnings(s, id) === 2);
+      assert('move vacates the old slot', s.grid[2]['C'] === null && s.grid[2]['SS'] === id);
+    })();
+
+    // --- assignToCell: dropping into a new slot moves the player (no double-book) ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Bob');
+      const id = s.players[0].id;
+      L.assignToCell(s, 1, 'P', id);
+      const ok = L.assignToCell(s, 1, 'C', id); // same inning, different position
+      assert('dropping into a new slot succeeds', ok === true);
+      assert('player vacates the original position', s.grid[1]['P'] === null);
+      assert('player now occupies the new position', s.grid[1]['C'] === id);
+      const heldThisInning = L.POSITIONS.filter(function (p) { return s.grid[1][p] === id; });
+      assert('player holds exactly one position that inning', heldThisInning.length === 1);
+    })();
+
+    // --- assignToCell: move within an inning ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Cara');
+      const id = s.players[0].id;
+      L.assignToCell(s, 1, 'P', id);
+      const ok = L.assignToCell(s, 1, 'P', id); // same cell re-drop = no-op success
+      assert('re-dropping into same cell succeeds', ok === true && s.grid[1]['P'] === id);
+    })();
+
+    // --- assignToCell: same position different inning is fine ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Dee');
+      const id = s.players[0].id;
+      L.assignToCell(s, 1, 'P', id);
+      const ok = L.assignToCell(s, 2, 'P', id);
+      assert('same position in different inning is allowed', ok === true && s.grid[2]['P'] === id);
+      assert('player now counts 2 innings', L.countInnings(s, id) === 2);
+    })();
+
+    // --- assignToCell: replacing an occupant ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Eve');
+      L.addPlayer(s, 'Finn');
+      const eve = s.players[0].id, finn = s.players[1].id;
+      L.assignToCell(s, 1, 'P', eve);
+      const ok = L.assignToCell(s, 1, 'P', finn); // Finn replaces Eve
+      assert('assigning into occupied cell replaces occupant', ok === true && s.grid[1]['P'] === finn);
+      assert('replaced player no longer plays that inning', L.countInnings(s, eve) === 0);
+    })();
+
+    // --- clearCell ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Gus');
+      const id = s.players[0].id;
+      L.assignToCell(s, 3, 'LF', id);
+      L.clearCell(s, 3, 'LF');
+      assert('clearCell empties just that cell', s.grid[3]['LF'] === null);
+      assert('clearCell drops the inning from the count', L.countInnings(s, id) === 0);
+    })();
+
+    // --- renamePlayer ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Bob');
+      const id = s.players[0].id;
+      L.assignToCell(s, 1, 'P', id);
+      assert('renamePlayer updates the name (trimmed)', L.renamePlayer(s, id, '  Bobby ') === true && s.players[0].name === 'Bobby');
+      assert('renamePlayer ignores empty/whitespace', L.renamePlayer(s, id, '   ') === false && s.players[0].name === 'Bobby');
+      assert('renamePlayer keeps the grid assignment (same id)', s.grid[1]['P'] === id);
+      assert('renamePlayer returns false for unknown id', L.renamePlayer(s, 'nope', 'X') === false);
+    })();
+
+    // --- removePlayer ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Hank');
+      L.addPlayer(s, 'Ivy');
+      const hank = s.players[0].id, ivy = s.players[1].id;
+      L.assignToCell(s, 1, 'P', hank);
+      L.assignToCell(s, 2, 'C', hank);
+      L.assignToCell(s, 1, 'C', ivy);
+      L.removePlayer(s, hank);
+      assert('removePlayer drops player from batting order', s.players.length === 1 && s.players[0].id === ivy);
+      assert('removePlayer clears player from every cell', s.grid[1]['P'] === null && s.grid[2]['C'] === null);
+      assert('removePlayer leaves other players assigned', s.grid[1]['C'] === ivy);
+    })();
+
+    // --- persistence round-trip ---
+    (function () {
+      const s = L.newState();
+      L.addPlayer(s, 'Jo');
+      L.assignToCell(s, 1, 'P', s.players[0].id);
+      const restored = L.deserialize(L.serialize(s));
+      assert('serialize/deserialize round-trips players', eq(restored.players, s.players));
+      assert('serialize/deserialize round-trips grid', eq(restored.grid, s.grid));
+
+      const garbage = L.deserialize('{not valid json');
+      assert('deserialize of garbage returns valid empty state', garbage.players.length === 0 && !!garbage.grid[1]);
+
+      // prune references to deleted players on load
+      const dirty = L.serialize(s).replace(/"players":\[[^\]]*\]/, '"players":[]');
+      const pruned = L.deserialize(dirty);
+      assert('deserialize prunes grid refs to missing players', pruned.grid[1]['P'] === null);
+    })();
+
+    document.getElementById('summary').textContent =
+      `${passed} passed, ${failed} failed`;
+    document.getElementById('summary').style.color = failed ? '#a11' : '#15611a';
+  </script>
+</body>
+</html>
