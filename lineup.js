@@ -4,7 +4,7 @@
   'use strict';
 
   var POSITIONS = ['P', 'C', 'SS', '1B', '2B', '3B', 'LF', 'LCF', 'RCF', 'RF'];
-  var INNINGS = [1, 2, 3, 4, 5];
+  var INNINGS = [1, 2, 3, 4, 5, 6];
 
   function newState() {
     var grid = {};
